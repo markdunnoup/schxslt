@@ -16,6 +16,7 @@
     <xsl:param name="phase" as="xs:string" required="yes"/>
 
     <svrl:schematron-output>
+      <xsl:sequence select="$schema/@xml:*"/>
       <xsl:sequence select="$schema/@schemaVersion"/>
       <xsl:if test="$phase ne '#ALL'">
         <xsl:attribute name="phase" select="$phase"/>
@@ -27,7 +28,7 @@
         </xsl:if>
         <xsl:for-each select="$schema/sch:p">
           <svrl:text>
-            <xsl:sequence select="(@id, @class, @icon)"/>
+            <xsl:sequence select="(@id, @class, @icon, @xml:*)"/>
             <xsl:apply-templates select="node()" mode="schxslt:message-template"/>
           </svrl:text>
         </xsl:for-each>
@@ -48,7 +49,10 @@
     <xsl:param name="pattern" as="element(sch:pattern)" required="yes"/>
     <xsl:if test="$schxslt.svrl.compact eq false()">
       <svrl:active-pattern>
-        <xsl:sequence select="($pattern/@id, $pattern/@role)"/>
+        <xsl:if test="exists($pattern/sch:title | $pattern/@id)">
+          <xsl:attribute name="name" select="($pattern/sch:title, $pattern/@id)[1]"/>
+        </xsl:if>
+        <xsl:sequence select="($pattern/@id, $pattern/@role, $pattern/@xml:*)"/>
         <attribute name="documents" select="base-uri(.)"/>
       </svrl:active-pattern>
     </xsl:if>
@@ -58,7 +62,7 @@
     <xsl:param name="rule" as="element(sch:rule)" required="yes"/>
     <xsl:if test="$schxslt.svrl.compact eq false()">
       <svrl:fired-rule>
-        <xsl:sequence select="($rule/@id, $rule/@role, $rule/@flag, $rule/@see, $rule/@icon, $rule/@fpi)"/>
+        <xsl:sequence select="($rule/@id, $rule/@role, $rule/@flag, $rule/@see, $rule/@icon, $rule/@fpi, $rule/@xml:*)"/>
         <attribute name="context">
           <xsl:value-of select="$rule/@context"/>
         </attribute>
@@ -86,12 +90,13 @@
     <xsl:param name="assert" as="element(sch:assert)" required="yes"/>
     <xsl:param name="location-function" as="xs:string" required="yes" tunnel="yes"/>
     <svrl:failed-assert location="{{{$location-function}({($assert/@subject, $assert/../@subject, '.')[1]})}}">
-      <xsl:sequence select="($assert/@role, $assert/@flag, $assert/@id, $assert/@see, $assert/@icon, $assert/@fpi)"/>
+      <xsl:sequence select="($assert/@role, $assert/@flag, $assert/@id, $assert/@see, $assert/@icon, $assert/@fpi, $assert/@xml:*)"/>
+      <xsl:sequence select="$assert/@xml:id | $assert/ancestor-or-self::*[@xml:lang]/@xml:lang"/>
       <attribute name="test">
         <xsl:value-of select="$assert/@test"/>
       </attribute>
       <xsl:call-template name="schxslt:handle-detailed-report">
-        <xsl:with-param name="schema" as="element(sch:schema)" tunnel="yes" select="$assert/../../.."/>
+        <xsl:with-param name="pattern" as="element(sch:pattern)" tunnel="yes" select="$assert/../.."/>
       </xsl:call-template>
     </svrl:failed-assert>
   </xsl:template>
@@ -101,11 +106,12 @@
     <xsl:param name="location-function" as="xs:string" required="yes" tunnel="yes"/>
     <svrl:successful-report location="{{{$location-function}({($report/@subject, $report/../@subject, '.')[1]})}}">
       <xsl:sequence select="($report/@role, $report/@flag, $report/@id, $report/@see, $report/@icon, $report/@fpi)"/>
+      <xsl:sequence select="$report/@xml:id | $report/ancestor-or-self::*[@xml:lang]/@xml:lang"/>
       <attribute name="test">
         <xsl:value-of select="$report/@test"/>
       </attribute>
       <xsl:call-template name="schxslt:handle-detailed-report">
-        <xsl:with-param name="schema" as="element(sch:schema)" tunnel="yes" select="$report/../../.."/>
+        <xsl:with-param name="pattern" as="element(sch:pattern)" tunnel="yes" select="$report/../.."/>
       </xsl:call-template>
     </svrl:successful-report>
   </xsl:template>
@@ -155,6 +161,7 @@
     <xsl:call-template name="schxslt:copy-properties"/>
     <xsl:if test="text() | *">
       <svrl:text>
+        <xsl:sequence select="@xml:*"/>
         <xsl:apply-templates select="node()" mode="schxslt:message-template"/>
       </svrl:text>
     </xsl:if>
@@ -163,21 +170,12 @@
   <xsl:template name="schxslt:handle-property">
     <xsl:param name="property" as="element(sch:property)"/>
     <svrl:property-reference property="{.}">
-      <xsl:sequence select="($property/@role, $property/@scheme)"/>
-      <xsl:for-each select="$property/node()">
-        <xsl:choose>
-          <xsl:when test="self::text()">
-            <xsl:if test="normalize-space()">
-              <svrl:text>
-                <xsl:apply-templates select="." mode="schxslt:message-template"/>
-              </svrl:text>
-            </xsl:if>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:sequence select="."/>
-          </xsl:otherwise>
-        </xsl:choose>
-      </xsl:for-each>
+      <xsl:sequence select="($property/@role, $property/@scheme, $property/@xml:*)"/>
+      <svrl:text>
+        <xsl:apply-templates select="$property/node()" mode="schxslt:message-template">
+          <xsl:with-param name="allow-xsl-copy-of" tunnel="yes" as="xs:boolean" select="true()"/>
+        </xsl:apply-templates>
+      </svrl:text>
     </svrl:property-reference>
   </xsl:template>
 
@@ -188,11 +186,11 @@
     <param name="schema">Schematron</param>
   </doc>
   <xsl:template name="schxslt:copy-properties">
-    <xsl:param name="schema" as="element(sch:schema)" tunnel="yes"/>
+    <xsl:param name="pattern" as="element(sch:pattern)" tunnel="yes"/>
 
     <xsl:for-each select="tokenize(@properties, ' ')">
       <xsl:call-template name="schxslt:handle-property">
-        <xsl:with-param name="property" select="$schema/sch:properties/sch:property[@id eq current()]"/>
+        <xsl:with-param name="property" select="($pattern/sch:properties/sch:property[@id eq current()], $pattern/../sch:properties/sch:property[@id eq current()])[1]"/>
       </xsl:call-template>
     </xsl:for-each>
   </xsl:template>
@@ -204,11 +202,12 @@
     <param name="schema">Schematron</param>
   </doc>
   <xsl:template name="schxslt:copy-diagnostics">
-    <xsl:param name="schema" as="element(sch:schema)" tunnel="yes"/>
+    <xsl:param name="pattern" as="element(sch:pattern)" tunnel="yes"/>
 
     <xsl:for-each select="tokenize(@diagnostics, ' ')">
-      <xsl:variable name="diagnostic" select="$schema/sch:diagnostics/sch:diagnostic[@id eq current()]"/>
+      <xsl:variable name="diagnostic" select="($pattern/sch:diagnostics/sch:diagnostic[@id eq current()] | $pattern/../sch:diagnostics/sch:diagnostic[@id eq current()])[1]"/>
       <svrl:diagnostic-reference diagnostic="{.}">
+        <xsl:sequence select="$diagnostic/@xml:*"/>
         <svrl:text>
           <xsl:sequence select="$diagnostic/@*"/>
           <xsl:apply-templates select="$diagnostic/node()" mode="schxslt:message-template"/>
@@ -219,6 +218,7 @@
 
   <xsl:template match="sch:dir | sch:emph | sch:span" mode="schxslt:message-template">
     <xsl:element name="svrl:{local-name()}">
+      <xsl:sequence select="@xml:*"/>
       <xsl:apply-templates select="node() | @*" mode="#current"/>
     </xsl:element>
   </xsl:template>

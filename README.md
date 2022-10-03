@@ -49,7 +49,7 @@ externalize abstract rules for them to be used.
 This proposal extends Schematron with a top-level ```rules``` element to hold abstract rules that are globally
 referencable by the ```@rule``` attribute of ```extends```.
 
-### Addition XSLT elements
+### Additional XSLT elements
 
 [Proposal 4](https://github.com/Schematron/schematron-enhancement-proposals/issues/4)
 
@@ -138,7 +138,21 @@ TBD
 
 ### Command line
 
-TBD
+Every release of SchXslt provides the compiled command line application with all dependencies as
+```schxslt-cli.jar```. To use the application run it with Java from the command line.
+
+```
+java -jar schxslt-cli.jar
+
+SchXslt CLI v1.9.2
+usage: name.dmaus.schxslt.cli.Application [-d <arg>] [-o <arg>] [-p <arg>] [-r] -s <arg> [-v]
+ -d,--document <arg>     Path to document
+ -o,--output <arg>       Output file (SVRL report)
+ -p,--phase <arg>        Validation phase
+ -r,--repl               Run as REPL
+ -s,--schematron <arg>   Path to schema
+ -v,--verbose            Verbose output
+```
 
 Building
 --

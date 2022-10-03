@@ -12,10 +12,12 @@
   <xsl:output indent="yes"/>
   <xsl:namespace-alias stylesheet-prefix="#default" result-prefix="xsl"/>
 
-  <xsl:key name="schxslt:diagnostics" match="sch:diagnostic" use="@id"/>
-  <xsl:key name="schxslt:properties" match="sch:property" use="@id"/>
+  <xsl:key name="schxslt:diagnostics" match="sch:schema/sch:diagnostics/sch:diagnostic" use="@id"/>
+  <xsl:key name="schxslt:properties" match="sch:schema/sch:properties/sch:property" use="@id"/>
 
   <xsl:param name="phase">#DEFAULT</xsl:param>
+  <xsl:param name="schxslt.compile.metadata" select="true()"/>
+  <xsl:param name="schxslt.compile.initial-document-function" select="'document'"/>
 
   <xsl:template match="/sch:schema">
 
@@ -90,33 +92,52 @@
       <xsl:copy-of select="xsl:include[not(preceding-sibling::sch:pattern)]"/>
       <xsl:copy-of select="xsl:import[not(preceding-sibling::sch:pattern)]"/>
 
+      <param name="schxslt.validate.initial-document-uri"/>
+
+      <template name="schxslt.validate.main">
+        <apply-templates select="{$schxslt.compile.initial-document-function}($schxslt.validate.initial-document-uri)"/>
+      </template>
+
       <template match="/">
+        <param name="schxslt.validate.recursive-call" select="false()"/>
 
-        <variable name="schxslt:report">
-          <xsl:call-template name="schxslt-api:metadata">
-            <xsl:with-param name="schema" select="."/>
-            <xsl:with-param name="source">
-              <xsl:call-template name="schxslt:version"/>
-            </xsl:with-param>
-          </xsl:call-template>
-          <xsl:choose>
-            <xsl:when test="$effective-phase = '#ALL'">
-              <xsl:for-each select="sch:pattern[sch:rule]">
-                <call-template name="{generate-id()}"/>
-              </xsl:for-each>
-            </xsl:when>
-            <xsl:otherwise>
-              <xsl:for-each select="sch:pattern[@id = current()/sch:phase[@id = $effective-phase]/sch:active/@pattern][sch:rule]">
-                <call-template name="{generate-id()}"/>
-              </xsl:for-each>
-            </xsl:otherwise>
-          </xsl:choose>
-        </variable>
+        <choose>
+          <when test="not($schxslt.validate.recursive-call) and (normalize-space($schxslt.validate.initial-document-uri) != '')">
+            <apply-templates select="{$schxslt.compile.initial-document-function}($schxslt.validate.initial-document-uri)">
+              <with-param name="schxslt.validate.recursive-call" select="true()"/>
+            </apply-templates>
+          </when>
+          <otherwise>
 
-        <xsl:call-template name="schxslt-api:report">
-          <xsl:with-param name="schema" select="."/>
-          <xsl:with-param name="phase" select="$effective-phase"/>
-        </xsl:call-template>
+            <variable name="schxslt:report">
+              <xsl:if test="$schxslt.compile.metadata">
+                <xsl:call-template name="schxslt-api:metadata">
+                  <xsl:with-param name="schema" select="."/>
+                  <xsl:with-param name="source">
+                    <xsl:call-template name="schxslt:version"/>
+                  </xsl:with-param>
+                </xsl:call-template>
+              </xsl:if>
+              <xsl:choose>
+                <xsl:when test="$effective-phase = '#ALL'">
+                  <xsl:for-each select="sch:pattern[sch:rule]">
+                    <call-template name="{generate-id()}"/>
+                  </xsl:for-each>
+                </xsl:when>
+                <xsl:otherwise>
+                  <xsl:for-each select="sch:pattern[@id = current()/sch:phase[@id = $effective-phase]/sch:active/@pattern][sch:rule]">
+                    <call-template name="{generate-id()}"/>
+                  </xsl:for-each>
+                </xsl:otherwise>
+              </xsl:choose>
+            </variable>
+
+            <xsl:call-template name="schxslt-api:report">
+              <xsl:with-param name="schema" select="."/>
+              <xsl:with-param name="phase" select="$effective-phase"/>
+            </xsl:call-template>
+          </otherwise>
+        </choose>
 
       </template>
 
@@ -215,14 +236,18 @@
   </xsl:template>
 
   <!-- Message templates -->
-  <xsl:template match="comment() | processing-instruction()" mode="schxslt:message-template">
+  <xsl:template match="comment() | processing-instruction()" mode="schxslt:message-template" priority="-10">
     <xsl:copy-of select="."/>
   </xsl:template>
 
-  <xsl:template match="*" mode="schxslt:message-template">
+  <xsl:template match="*" mode="schxslt:message-template" priority="-10">
     <element namespace="{namespace-uri(.)}" name="{local-name(.)}">
       <xsl:apply-templates select="node() | @*" mode="schxslt:message-template"/>
     </element>
+  </xsl:template>
+
+  <xsl:template match="xsl:copy-of[ancestor::sch:property]" mode="schxslt:message-template">
+    <xsl:copy-of select="."/>
   </xsl:template>
 
   <xsl:template match="@*" mode="schxslt:message-template">
@@ -256,7 +281,7 @@
 
   <xsl:template match="@*" mode="schxslt:variable-content">
     <attribute namespace="{namespace-uri(.)}" name="{local-name(.)}">
-      <value-of select="."/>
+      <xsl:value-of select="."/>
     </attribute>
   </xsl:template>
 
