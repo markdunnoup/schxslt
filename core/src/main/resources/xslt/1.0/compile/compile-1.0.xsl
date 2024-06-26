@@ -18,6 +18,7 @@
   <xsl:param name="phase">#DEFAULT</xsl:param>
   <xsl:param name="schxslt.compile.metadata" select="true()"/>
   <xsl:param name="schxslt.compile.initial-document-function" select="'document'"/>
+  <xsl:param name="schxslt.compile.default-query-binding" select="'xslt'"/>
 
   <xsl:template match="/sch:schema">
 
@@ -37,7 +38,17 @@
       </xsl:choose>
     </xsl:variable>
 
-    <xsl:if test="@queryBinding and translate(@queryBinding, 'XSLT', 'xslt') != 'xslt'">
+    <xsl:variable name="queryBinding">
+      <xsl:choose>
+        <xsl:when test="@queryBinding">
+          <xsl:value-of select="translate(@queryBinding, 'XSLT', 'xslt')"/>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:value-of select="$schxslt.compile.default-query-binding"/>
+        </xsl:otherwise>
+      </xsl:choose>
+    </xsl:variable>
+    <xsl:if test="$queryBinding != 'xslt'">
       <xsl:message terminate="yes">
         This Schematron processor only supports the 'xslt' query binding
       </xsl:message>
